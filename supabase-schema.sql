@@ -223,7 +223,7 @@ begin
   if length(v_title) < 1 or length(v_title) > 120 then
     raise exception 'El nombre de la playlist es obligatorio';
   end if;
-  if v_url not like 'https://open.spotify.com/playlist/%' then
+  if v_url !~ '^https://open\.spotify\.com/([^/]+/)?playlist/[A-Za-z0-9]+' then
     raise exception 'El enlace debe ser una playlist pública de Spotify';
   end if;
   insert into public.spotify_playlists (title, spotify_url)
