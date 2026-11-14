@@ -125,6 +125,13 @@ input,select,textarea { background:rgba(4,7,27,.72); color:#fff; border-color:rg
 .location-sketch strong, .location-sketch small { padding-left:16px; padding-right:16px; }
 .location-sketch strong { padding-top:10px; }
 .location-sketch small { padding-bottom:13px; }
+.song-suggestion-form { display:grid; gap:12px; margin-top:18px; }
+.song-suggestion-form label span { color:var(--muted); font-size:11px; }
+.song-suggestion-form .btn { margin-top:4px; }
+.form-hint { color:var(--muted); font-size:12px; line-height:1.5; margin:14px 0 0; }
+.song-link { color:var(--cyan); font-weight:700; text-decoration:none; }
+.song-link:hover { text-decoration:underline; }
+.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .sketch-label { color:#fff; font-weight:700; }
 .sketch-label.destination { color:var(--pink); text-shadow:0 0 10px rgba(255,50,213,.6); }
 .sketch-road { width:70%; display:flex; align-items:center; gap:8px; }
