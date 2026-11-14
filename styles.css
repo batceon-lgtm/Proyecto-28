@@ -133,4 +133,49 @@ input,select,textarea { background:rgba(4,7,27,.72); color:#fff; border-color:rg
 .route-item strong { display:block; color:#fff; }
 .route-item p { margin:5px 0 9px; color:#c9d0ef; font-size:13px; line-height:1.5; }
 @media(max-width:700px) { .location-section .section-head { display:block; } .location-section .section-head .btn { display:inline-block; margin-top:15px; } .location-grid { grid-template-columns:1fr; } }
+@media(max-width:600px) {
+  html { overflow-x:hidden; }
+  body { min-width:0; overflow-x:hidden; }
+  .shell { display:block; min-height:100vh; }
+  .sidebar { padding:10px 10px 12px; position:relative; }
+  .brand { font-size:22px; padding:5px 8px 12px; }
+  .brand span { font-size:10px; }
+  .nav { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+  .nav::-webkit-scrollbar { display:none; }
+  .nav button { flex:0 0 auto; padding:11px 13px; font-size:13px; }
+  .topbar { min-height:68px; height:auto; padding:13px 14px; gap:12px; }
+  .topbar strong { font-size:14px; }
+  .topbar .eyebrow { font-size:10px; }
+  .profile { gap:7px; font-size:12px; }
+  .profile .btn { padding:9px 10px; font-size:12px; }
+  .avatar { width:30px; height:30px; font-size:11px; }
+  .content { padding:18px 12px 32px; }
+  h1 { font-size:34px; line-height:1.08; }
+  h2 { font-size:24px; }
+  .hero, .guest-hero { padding:28px 17px; border-radius:17px; }
+  .hero .sub, .guest-hero .sub { font-size:14px; }
+  .guest-hero h1 { font-size:clamp(40px,14vw,62px); }
+  .countdown { gap:9px; margin:23px 0; }
+  .countdown b { font-size:24px; }
+  .countdown span { font-size:9px; letter-spacing:.6px; }
+  .actions { gap:8px; }
+  .actions .btn { min-height:44px; padding:12px 14px; }
+  .guest-hero .actions .btn { width:100%; }
+  .grid, .grid.two, .grid.stats, .guest-grid { grid-template-columns:1fr; gap:13px; margin-top:16px; }
+  .card { padding:17px; border-radius:14px; }
+  .section-head { align-items:flex-start; flex-wrap:wrap; margin-bottom:13px; }
+  .section-head input, .section-head select { width:100%; max-width:none !important; }
+  .table { display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
+  .table th, .table td { padding:12px 8px; }
+  .location-section { padding:17px; margin-top:16px; }
+  .location-map-preview { height:220px; }
+  .location-section .section-head .btn { width:100%; text-align:center; }
+  .route-item { padding:13px; }
+  .route-item p { font-size:12px; }
+  .auth-screen { padding:12px; place-items:start center; padding-top:18px; }
+  .auth-card { padding:25px 19px; border-radius:17px; }
+  .auth-form .btn { min-height:46px; }
+  .modal { padding:12px; }
+  .modal-card { padding:25px 18px; }
+}
 
