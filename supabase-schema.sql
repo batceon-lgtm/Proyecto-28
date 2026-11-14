@@ -313,7 +313,7 @@ security definer
 set search_path = public
 as $$
   select coalesce(jsonb_agg(jsonb_build_object(
-    'id', id, 'guest_name', guest_name, 'target', target, 'message', message,
+    'id', id, 'target', target, 'message', message,
     'created_at', created_at,
     'can_edit', (guest_key = lower(trim(coalesce(p_guest_name, ''))) and guest_token = coalesce(p_guest_token, ''))
   ) order by created_at desc), '[]'::jsonb)
