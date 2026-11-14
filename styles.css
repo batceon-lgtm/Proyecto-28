@@ -103,4 +103,13 @@ h1,h2,h3 { color:#fff; text-shadow:0 0 18px rgba(38,230,255,.18); } h1 { letter-
 input,select,textarea { background:rgba(4,7,27,.72); color:#fff; border-color:rgba(38,230,255,.28); } input:focus,select:focus,textarea:focus { border-color:var(--cyan); box-shadow:0 0 12px rgba(38,230,255,.2); }
 .auth-screen { background:radial-gradient(circle at 50% 10%,#25236e 0,transparent 45%),#05071b; } .auth-card { background:rgba(11,15,45,.85); border-color:rgba(38,230,255,.35); box-shadow:0 0 45px rgba(38,230,255,.15); backdrop-filter:blur(16px); } .auth-tabs { background:#090d2b; } .auth-tabs button.selected { background:linear-gradient(90deg,rgba(38,230,255,.22),rgba(255,50,213,.18)); color:#fff; }
 .auth-error { color:#ff8bdc; }
+.modal { display:none; position:fixed; inset:0; z-index:30; place-items:center; padding:20px; background:rgba(1,2,14,.76); backdrop-filter:blur(8px); }
+.modal.open { display:grid; }
+.modal-card { width:min(100%,430px); position:relative; padding:30px; border:1px solid var(--cyan); border-radius:18px; background:linear-gradient(145deg,rgba(20,29,83,.98),rgba(12,5,45,.98)); box-shadow:0 0 35px rgba(38,230,255,.25),0 0 80px rgba(255,50,213,.12); }
+.modal-card h2 { margin-top:8px; }
+.modal-close { position:absolute; top:12px; right:14px; color:#fff; background:transparent; font-size:28px; line-height:1; }
+.attendance-form { display:grid; gap:12px; margin-top:22px; }
+.attendance-form label { display:flex; align-items:center; gap:10px; padding:13px; border:1px solid rgba(38,230,255,.22); border-radius:10px; color:#fff; background:rgba(38,230,255,.06); }
+.attendance-form input { accent-color:var(--pink); }
+.attendance-form .btn { margin-top:8px; }
 
