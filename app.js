@@ -65,7 +65,7 @@ async function loadAttendanceSummary() {
 async function loadGuestList() {
   const body = document.querySelector('#guest-table-body');
   if (!body || !supabaseClient) return;
-  const { data, error } = await supabaseClient.from('guests').select('id,name,attending,created_at,updated_at').order('name');
+  const { data, error } = await supabaseClient.rpc('list_guests');
   if (error) { body.innerHTML = '<tr><td colspan="4">No se pudo cargar la lista.</td></tr>'; return; }
   const guests = Array.isArray(data) ? data : [];
   const total = document.querySelector('#guest-total');
