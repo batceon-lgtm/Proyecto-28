@@ -182,3 +182,72 @@ $$;
 revoke all on function public.list_song_suggestions() from public;
 grant execute on function public.list_song_suggestions() to authenticated;
 
+create or replace function public.list_public_song_suggestions()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'song_title', song_title,
+    'artist', artist,
+    'spotify_url', spotify_url
+  ) order by created_at desc), '[]'::jsonb)
+  from public.song_suggestions;
+$$;
+
+revoke all on function public.list_public_song_suggestions() from public;
+grant execute on function public.list_public_song_suggestions() to anon, authenticated;
+
+create table if not exists public.spotify_playlists (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  spotify_url text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.spotify_playlists enable row level security;
+revoke all on table public.spotify_playlists from anon, authenticated;
+
+create or replace function public.add_spotify_playlist(p_title text, p_spotify_url text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_title text := trim(p_title);
+  v_url text := trim(p_spotify_url);
+  v_id uuid;
+begin
+  if length(v_title) < 1 or length(v_title) > 120 then
+    raise exception 'El nombre de la playlist es obligatorio';
+  end if;
+  if v_url not like 'https://open.spotify.com/playlist/%' then
+    raise exception 'El enlace debe ser una playlist pública de Spotify';
+  end if;
+  insert into public.spotify_playlists (title, spotify_url)
+  values (v_title, v_url)
+  returning id into v_id;
+  return jsonb_build_object('id', v_id, 'title', v_title, 'spotify_url', v_url);
+end;
+$$;
+
+revoke all on function public.add_spotify_playlist(text, text) from public;
+grant execute on function public.add_spotify_playlist(text, text) to authenticated;
+
+create or replace function public.list_spotify_playlists()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', id, 'title', title, 'spotify_url', spotify_url
+  ) order by created_at desc), '[]'::jsonb)
+  from public.spotify_playlists;
+$$;
+
+revoke all on function public.list_spotify_playlists() from public;
+grant execute on function public.list_spotify_playlists() to anon, authenticated;
+
