@@ -32,6 +32,7 @@ function layout() {
   if (admin && state.view === 'music') { prepareAdminMusic(); preparePlaylistAdmin(); loadSongSuggestions(); loadPlaylistsAdmin(); }
   if (admin && state.view === 'dashboard') { prepareAdminDashboardDedications(); loadAdminDedications(); }
   if (admin && state.view === 'dedications') loadAdminDedications();
+  if (admin && state.view === 'content') { prepareAdminContentDedications(); loadAdminContentDedications(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
   const confirmButton = app.querySelector('[data-confirm-attendance]');
@@ -294,6 +295,20 @@ function prepareAdminDashboardDedications() {
   view.insertAdjacentHTML('beforeend', '<div class="card admin-dedications-card"><div class="section-head"><div><div class="eyebrow">Comunidad</div><h2>Dedicatorias recientes</h2><small>Mensajes enviados por los invitados</small></div><button class="btn ghost" data-action="Dedicatorias visibles en el panel de invitados">Ver panel</button></div><div id="admin-dedications-list"><p class="form-hint">Cargando dedicatorias...</p></div></div>');
   const button = view.querySelector('.admin-dedications-card [data-action]');
   if (button) button.addEventListener('click', () => toast(button.dataset.action));
+}
+function prepareAdminContentDedications() {
+  const card = document.querySelector('.view .grid.two .card:first-child');
+  if (!card) return;
+  card.innerHTML = '<div class="section-head"><div><h2>Dedicatorias recientes</h2><small>Mensajes reales enviados por los invitados</small></div></div><div id="content-dedications-list"><p class="form-hint">Cargando dedicatorias...</p></div>';
+}
+async function loadAdminContentDedications() {
+  const list = document.querySelector('#content-dedications-list');
+  if (!list || !supabaseClient) return;
+  const { data, error } = await supabaseClient.rpc('list_all_dedications');
+  if (error) { list.innerHTML = '<p class="form-hint">No se pudieron cargar las dedicatorias. Ejecuta el SQL actualizado.</p>'; return; }
+  const labels = { general: 'Para todos', fabian: 'Para Fabián', alexander: 'Para Alexander' };
+  const dedications = Array.isArray(data) ? data : [];
+  list.innerHTML = dedications.length ? dedications.map(item => `<article class="dedication-card"><div class="dedication-meta"><span class="pill">${labels[item.target] || 'Para todos'}</span><small>${escapeHtml(item.guest_name)}</small></div><p>${escapeHtml(item.message)}</p></article>`).join('') : '<p class="form-hint">Todavía no hay dedicatorias publicadas.</p>';
 }
 async function loadAdminDedications() {
   const list = document.querySelector('#admin-dedications-list');
