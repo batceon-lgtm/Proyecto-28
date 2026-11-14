@@ -292,8 +292,8 @@ begin
   if length(v_message) < 1 or length(v_message) > 500 then raise exception 'La dedicatoria debe tener entre 1 y 500 caracteres'; end if;
 
   perform pg_advisory_xact_lock(hashtext(v_guest_key || ':' || v_token));
-  if (select count(*) from public.dedications where guest_key = v_guest_key and guest_token = v_token) >= 3 then
-    raise exception 'Solo puedes publicar hasta 3 dedicatorias';
+  if (select count(*) from public.dedications where guest_key = v_guest_key and guest_token = v_token) >= 6 then
+    raise exception 'Solo puedes publicar hasta 6 dedicatorias';
   end if;
 
   insert into public.dedications (guest_name, guest_key, guest_token, target, message)
