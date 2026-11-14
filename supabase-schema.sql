@@ -111,3 +111,74 @@ $$;
 revoke all on function public.list_guests() from public;
 grant execute on function public.list_guests() to authenticated;
 
+create table if not exists public.song_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  guest_name text not null,
+  song_title text not null,
+  artist text,
+  spotify_url text,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.song_suggestions enable row level security;
+revoke all on table public.song_suggestions from anon, authenticated;
+
+create or replace function public.register_song_suggestion(
+  p_guest_name text,
+  p_song_title text,
+  p_artist text default null,
+  p_spotify_url text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_guest_name text := trim(p_guest_name);
+  v_song_title text := trim(p_song_title);
+  v_artist text := nullif(trim(coalesce(p_artist, '')), '');
+  v_spotify_url text := nullif(trim(coalesce(p_spotify_url, '')), '');
+  v_id uuid;
+begin
+  if length(v_guest_name) < 2 or length(v_guest_name) > 80 then
+    raise exception 'El nombre del invitado no es válido';
+  end if;
+  if length(v_song_title) < 1 or length(v_song_title) > 160 then
+    raise exception 'El nombre de la canción es obligatorio';
+  end if;
+  if v_artist is not null and length(v_artist) > 120 then
+    raise exception 'El nombre del artista es demasiado largo';
+  end if;
+  if v_spotify_url is not null and v_spotify_url not like 'https://open.spotify.com/%' then
+    raise exception 'El enlace debe ser de Spotify';
+  end if;
+
+  insert into public.song_suggestions (guest_name, song_title, artist, spotify_url)
+  values (v_guest_name, v_song_title, v_artist, v_spotify_url)
+  returning id into v_id;
+
+  return jsonb_build_object('id', v_id, 'song_title', v_song_title, 'artist', v_artist, 'spotify_url', v_spotify_url);
+end;
+$$;
+
+revoke all on function public.register_song_suggestion(text, text, text, text) from public;
+grant execute on function public.register_song_suggestion(text, text, text, text) to anon, authenticated;
+
+create or replace function public.list_song_suggestions()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', id, 'guest_name', guest_name, 'song_title', song_title,
+    'artist', artist, 'spotify_url', spotify_url, 'status', status, 'created_at', created_at
+  ) order by created_at desc), '[]'::jsonb)
+  from public.song_suggestions;
+$$;
+
+revoke all on function public.list_song_suggestions() from public;
+grant execute on function public.list_song_suggestions() to authenticated;
+
