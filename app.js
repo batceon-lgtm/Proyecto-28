@@ -30,6 +30,7 @@ function layout() {
   app.querySelectorAll('[data-scroll]').forEach(btn => btn.addEventListener('click', event => { event.preventDefault(); const target = document.querySelector('#' + btn.dataset.scroll); if (target) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 18, behavior: 'auto' }); }));
   if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); if (state.view === 'dashboard') { removeGuestMusicFromHome(); removeGuestDedicationFromHome(); } loadPublicMusic(); if (state.view === 'guest-wall') loadDedications(); }
   if (admin && state.view === 'music') { prepareAdminMusic(); preparePlaylistAdmin(); loadSongSuggestions(); loadPlaylistsAdmin(); }
+  if (admin && state.view === 'dashboard') { prepareAdminDashboardDedications(); loadAdminDedications(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
   const confirmButton = app.querySelector('[data-confirm-attendance]');
@@ -81,6 +82,10 @@ function layout() {
     playlistForm.reset(); toast('Playlist agregada'); loadPlaylistsAdmin();
   });
   const dedicationForm = app.querySelector('#dedication-form');
+  const openDedication = app.querySelector('[data-open-dedication]');
+  if (openDedication) openDedication.addEventListener('click', () => document.querySelector('#dedication-modal')?.classList.add('open'));
+  const closeDedication = app.querySelector('[data-close-dedication]');
+  if (closeDedication) closeDedication.addEventListener('click', () => document.querySelector('#dedication-modal')?.classList.remove('open'));
   if (dedicationForm) dedicationForm.addEventListener('submit', async e => {
     e.preventDefault();
     const formData = new FormData(dedicationForm);
@@ -94,7 +99,7 @@ function layout() {
     const { error } = await supabaseClient.rpc(rpc, params);
     button.disabled = false; button.textContent = id ? 'Guardar cambios' : 'Publicar dedicatoria';
     if (error) { toast(error.message || 'No se pudo guardar la dedicatoria.'); return; }
-    dedicationForm.reset(); dedicationForm.querySelector('[name="dedicationId"]').value = ''; button.textContent = 'Publicar dedicatoria'; toast(id ? 'Dedicatoria actualizada' : 'Dedicatoria publicada'); loadDedications();
+    dedicationForm.reset(); dedicationForm.querySelector('[name="dedicationId"]').value = ''; button.textContent = 'Publicar dedicatoria'; document.querySelector('#dedication-modal')?.classList.remove('open'); toast(id ? 'Dedicatoria actualizada' : 'Dedicatoria publicada'); loadDedications();
   });
   app.querySelectorAll('[data-edit-dedication]').forEach(button => button.addEventListener('click', () => {
     const form = document.querySelector('#dedication-form'); if (!form) return;
@@ -281,6 +286,22 @@ function prepareAdminMusic() {
   if (!card) return;
   card.innerHTML = '<div class="section-head"><div><h2>Sugerencias recibidas</h2><small>Revisa canciones y enlaces enviados por invitados</small></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Canción</th><th>Artista</th><th>Invitado</th><th>Spotify</th><th>Estado</th></tr></thead><tbody id="song-suggestions-body"><tr><td colspan="5">Cargando sugerencias...</td></tr></tbody></table></div>';
 }
+function prepareAdminDashboardDedications() {
+  const view = document.querySelector('.view');
+  if (!view || document.querySelector('#admin-dedications-list')) return;
+  view.insertAdjacentHTML('beforeend', '<div class="card admin-dedications-card"><div class="section-head"><div><div class="eyebrow">Comunidad</div><h2>Dedicatorias recientes</h2><small>Mensajes enviados por los invitados</small></div><button class="btn ghost" data-action="Dedicatorias visibles en el panel de invitados">Ver panel</button></div><div id="admin-dedications-list"><p class="form-hint">Cargando dedicatorias...</p></div></div>');
+  const button = view.querySelector('.admin-dedications-card [data-action]');
+  if (button) button.addEventListener('click', () => toast(button.dataset.action));
+}
+async function loadAdminDedications() {
+  const list = document.querySelector('#admin-dedications-list');
+  if (!list || !supabaseClient) return;
+  const { data, error } = await supabaseClient.rpc('list_dedications');
+  if (error) { list.innerHTML = '<p class="form-hint">No se pudieron cargar las dedicatorias. Ejecuta el SQL actualizado.</p>'; return; }
+  const labels = { general: 'Para todos', fabian: 'Para Fabián', alexander: 'Para Alexander' };
+  const dedications = Array.isArray(data) ? data.slice(0, 6) : [];
+  list.innerHTML = dedications.length ? dedications.map(item => `<article class="dedication-card"><div class="dedication-meta"><span class="pill">${labels[item.target] || 'Para todos'}</span><small>${escapeHtml(item.guest_name)}</small></div><p>${escapeHtml(item.message)}</p></article>`).join('') : '<p class="form-hint">Todavía no hay dedicatorias publicadas.</p>';
+}
 function removeGuestMusicFromHome() {
   const card = document.querySelector('.grid.two .card:first-child');
   if (card) card.remove();
@@ -301,6 +322,7 @@ function preparePlaylistAdmin() {
   if (!card || document.querySelector('#playlist-form')) return;
   card.insertAdjacentHTML('beforeend', '<hr class="music-divider"><div class="music-subhead"><div><h2>Playlists de Spotify</h2><small>Agrega playlists públicas para mostrarlas a los invitados</small></div></div><form id="playlist-form" class="song-suggestion-form"><label>Nombre de la playlist *<input name="playlistTitle" required maxlength="120" placeholder="Ej. Playlist de la fiesta" /></label><label>Enlace público de Spotify *<input name="playlistUrl" type="url" required placeholder="https://open.spotify.com/playlist/..." /></label><button class="btn" type="submit">Agregar playlist</button></form><div id="admin-playlists" class="admin-playlists"><p class="form-hint">Cargando playlists...</p></div>');
 }
+function guestDedicationsPage() { return `<div class="dedications-page"><div class="section-head"><div><div class="eyebrow">Área de invitados</div><h1>Dedicatorias</h1><p class="sub">Escribe un mensaje para todos, para Fabián o para Alexander.</p></div><div class="dedication-header-actions"><button class="btn" data-open-dedication>Nueva dedicatoria</button><button class="btn secondary" data-view="dashboard">← Mi invitación</button></div></div><div class="card dedication-panel"><div class="music-subhead"><div><h2>Dedicatorias publicadas</h2><small>Máximo 6 por invitado · puedes editar o eliminar las tuyas</small></div></div><div id="dedications-list"><p class="form-hint">Cargando dedicatorias...</p></div></div></div><div id="dedication-modal" class="modal"><div class="modal-card dedication-modal-card"><button class="modal-close" data-close-dedication>×</button><div class="eyebrow">Nueva dedicatoria</div><h2>Comparte un mensaje</h2><form id="dedication-form" class="song-suggestion-form"><input type="hidden" name="dedicationId" /><label>¿Para quién es?<select name="dedicationTarget"><option value="general">Para todos</option><option value="fabian">Para Fabián</option><option value="alexander">Para Alexander</option></select></label><label>Mensaje<textarea name="dedicationMessage" required maxlength="500" placeholder="Escribe tu mensaje..."></textarea></label><button class="btn" type="submit">Publicar dedicatoria</button></form></div></div>`; }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char])); }
 function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2200); }
 layout();
