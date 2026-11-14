@@ -1,6 +1,13 @@
 const app = document.querySelector('#app');
 const state = { role: 'guest', view: 'dashboard' };
 const auth = { user: null, mode: 'guest' };
+const supabaseClient = window.supabase?.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
+const adminDirectory = {
+  'al.t_creo': { name: 'Alexander', email: 'al.t_creo@proyecto28.local' },
+  'broncano78': { name: 'Fabián', email: 'broncano78@proyecto28.local' },
+  'cabezon12': { name: 'Carlos', email: 'cabezon12@proyecto28.local' },
+  'niñoviejo22': { name: 'Guillermo', email: 'niñoviejo22@proyecto28.local' }
+};
 // Las cuentas reales deben validarse en un backend. Nunca se publican
 // contraseñas ni hashes en este frontend público.
 const adminUsers = [];
@@ -19,7 +26,7 @@ function layout() {
     </aside><main class="main"><header class="topbar"><div><div class="eyebrow">${admin ? 'Área privada' : 'Área de invitados'}</div><strong>${admin ? 'Organización del evento' : 'Te esperamos'}</strong></div><div class="profile"><span>${auth.user.name || ''}</span><button class="btn ghost" id="switch-role">Cerrar sesión</button><span class="avatar">${admin ? 'AD' : 'IN'}</span></div></header>
     <section class="content">${admin ? adminView() : guestView()}</section></main></div><div class="toast" id="toast"></div>`;
   app.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { state.view = btn.dataset.view; layout(); }));
-  document.querySelector('#switch-role').addEventListener('click', () => { auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
+  document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
 }
 
@@ -30,7 +37,7 @@ function bindAuth() {
   const guestForm = document.querySelector('#guest-form');
   if (guestForm) guestForm.addEventListener('submit', e => { e.preventDefault(); const name = new FormData(guestForm).get('guestName').trim(); const names = JSON.parse(localStorage.getItem('eventGuestNames') || '[]'); if (names.some(n => n.toLowerCase() === name.toLowerCase())) { alert('Este nombre ya está registrado.'); return; } names.push(name); localStorage.setItem('eventGuestNames', JSON.stringify(names)); auth.user={name, role:'guest'}; state.role='guest'; layout(); });
   const adminForm = document.querySelector('#admin-form');
-  if (adminForm) adminForm.addEventListener('submit', async e => { e.preventDefault(); document.querySelector('#auth-error').textContent='El acceso de administrador se habilitará al conectar un backend seguro.'; });
+  if (adminForm) adminForm.addEventListener('submit', async e => { e.preventDefault(); const data = new FormData(adminForm); const username = String(data.get('username')).trim().toLowerCase(); const record = adminDirectory[username]; if (!record || !supabaseClient) { document.querySelector('#auth-error').textContent='La autenticación todavía no está configurada.'; return; } const { data: result, error } = await supabaseClient.auth.signInWithPassword({ email: record.email, password: data.get('password') }); if (error) { document.querySelector('#auth-error').textContent='Usuario o contraseña incorrectos.'; return; } auth.user={name:record.name, username, role:'admin', id:result.user.id}; state.role='admin'; state.view='dashboard'; layout(); });
 }
 
 function adminView() {
@@ -49,4 +56,5 @@ function content() { return `<div class="section-head"><div><div class="eyebrow"
 function guestView() { return `<div class="guest-hero"><div class="eyebrow">Una invitación especial</div><h1>Celebramos juntos un nuevo año</h1><p class="sub">Acompáñanos en una noche para compartir, reír, bailar y crear recuerdos inolvidables.</p><div class="countdown"><div><b>18</b><span>Días</span></div><div><b>07</b><span>Horas</span></div><div><b>42</b><span>Minutos</span></div></div><div class="eyebrow">Sábado · 24 de mayo, 2026 · 7:00 p. m.</div><div class="actions" style="justify-content:center"><button class="btn" data-action="Asistencia confirmada">Confirmar asistencia</button><button class="btn secondary" data-action="Mapa abierto">Ver ubicación</button></div></div><div class="grid guest-grid"><div class="card"><span class="icon">⌖</span><h3>Casa Verde</h3><p class="sub">Av. Los Jardines 245<br>Miraflores, Lima</p></div><div class="card"><span class="icon">♧</span><h3>Dress code</h3><p class="sub">Elegante casual<br>Ven con tu mejor estilo.</p></div><div class="card"><span class="icon">◷</span><h3>El programa</h3><p class="sub">Recepción · Cena · Brindis<br>Juegos · Baile</p></div></div><div class="grid two"><div class="card"><div class="section-head"><h2>Elige una canción</h2><small>Vota por tus favoritas</small></div>${[['Dancing Queen','ABBA','12'],['La vida es un carnaval','Celia Cruz','9'],['Vivir mi vida','Marc Anthony','7']].map(s=>`<div class="song"><span>♫</span><div class="row-main"><strong>${s[0]}</strong><span>${s[1]}</span></div><button class="vote" data-action="Voto registrado">♡ ${s[2]}</button></div>`).join('')}<div class="actions"><button class="btn ghost" data-action="Sugerencia enviada">+ Sugerir canción</button></div></div><div class="card"><div class="section-head"><h2>Deja una dedicatoria</h2></div><textarea placeholder="Escribe un mensaje para el cumpleañero..."></textarea><div class="actions"><button class="btn" data-action="Dedicatoria publicada">Publicar mensaje</button></div></div></div>`; }
 function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2200); }
 layout();
+if (supabaseClient) supabaseClient.auth.getSession().then(({data}) => { if (data.session?.user?.email) { const username = data.session.user.email.split('@')[0]; const record = adminDirectory[username]; if (record) { auth.user={name:record.name, username, role:'admin', id:data.session.user.id}; state.role='admin'; layout(); } } });
 
