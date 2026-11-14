@@ -251,3 +251,121 @@ $$;
 revoke all on function public.list_spotify_playlists() from public;
 grant execute on function public.list_spotify_playlists() to anon, authenticated;
 
+create table if not exists public.dedications (
+  id uuid primary key default gen_random_uuid(),
+  guest_name text not null,
+  guest_key text not null,
+  guest_token text not null,
+  target text not null check (target in ('general', 'fabian', 'alexander')),
+  message text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists dedications_guest_key_token_idx
+  on public.dedications (guest_key, guest_token);
+
+alter table public.dedications enable row level security;
+revoke all on table public.dedications from anon, authenticated;
+
+create or replace function public.add_dedication(
+  p_guest_name text,
+  p_guest_token text,
+  p_target text,
+  p_message text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_guest_name text := trim(p_guest_name);
+  v_guest_key text := lower(trim(p_guest_name));
+  v_token text := trim(p_guest_token);
+  v_message text := trim(p_message);
+  v_id uuid;
+begin
+  if length(v_guest_name) < 2 or length(v_guest_name) > 80 then raise exception 'El nombre del invitado no es válido'; end if;
+  if length(v_token) < 16 or length(v_token) > 128 then raise exception 'Sesión de invitado no válida'; end if;
+  if p_target not in ('general', 'fabian', 'alexander') then raise exception 'Destinatario no válido'; end if;
+  if length(v_message) < 1 or length(v_message) > 500 then raise exception 'La dedicatoria debe tener entre 1 y 500 caracteres'; end if;
+
+  perform pg_advisory_xact_lock(hashtext(v_guest_key || ':' || v_token));
+  if (select count(*) from public.dedications where guest_key = v_guest_key and guest_token = v_token) >= 3 then
+    raise exception 'Solo puedes publicar hasta 3 dedicatorias';
+  end if;
+
+  insert into public.dedications (guest_name, guest_key, guest_token, target, message)
+  values (v_guest_name, v_guest_key, v_token, p_target, v_message)
+  returning id into v_id;
+  return jsonb_build_object('id', v_id);
+end;
+$$;
+
+revoke all on function public.add_dedication(text, text, text, text) from public;
+grant execute on function public.add_dedication(text, text, text, text) to anon, authenticated;
+
+create or replace function public.list_dedications(p_guest_name text default null, p_guest_token text default null)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', id, 'guest_name', guest_name, 'target', target, 'message', message,
+    'created_at', created_at,
+    'can_edit', (guest_key = lower(trim(coalesce(p_guest_name, ''))) and guest_token = coalesce(p_guest_token, ''))
+  ) order by created_at desc), '[]'::jsonb)
+  from public.dedications;
+$$;
+
+revoke all on function public.list_dedications(text, text) from public;
+grant execute on function public.list_dedications(text, text) to anon, authenticated;
+
+create or replace function public.update_dedication(
+  p_id uuid,
+  p_guest_name text,
+  p_guest_token text,
+  p_target text,
+  p_message text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_id uuid;
+begin
+  if p_target not in ('general', 'fabian', 'alexander') then raise exception 'Destinatario no válido'; end if;
+  if length(trim(p_message)) < 1 or length(trim(p_message)) > 500 then raise exception 'La dedicatoria debe tener entre 1 y 500 caracteres'; end if;
+  update public.dedications set target = p_target, message = trim(p_message), updated_at = now()
+   where id = p_id and guest_key = lower(trim(p_guest_name)) and guest_token = trim(p_guest_token)
+   returning id into v_id;
+  if v_id is null then raise exception 'Solo puedes editar tus propias dedicatorias'; end if;
+  return jsonb_build_object('id', v_id);
+end;
+$$;
+
+revoke all on function public.update_dedication(uuid, text, text, text, text) from public;
+grant execute on function public.update_dedication(uuid, text, text, text, text) to anon, authenticated;
+
+create or replace function public.delete_dedication(p_id uuid, p_guest_name text, p_guest_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_id uuid;
+begin
+  delete from public.dedications
+   where id = p_id and guest_key = lower(trim(p_guest_name)) and guest_token = trim(p_guest_token)
+   returning id into v_id;
+  if v_id is null then raise exception 'Solo puedes eliminar tus propias dedicatorias'; end if;
+  return jsonb_build_object('id', v_id);
+end;
+$$;
+
+revoke all on function public.delete_dedication(uuid, text, text) from public;
+grant execute on function public.delete_dedication(uuid, text, text) to anon, authenticated;
+
