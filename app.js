@@ -33,7 +33,7 @@ function layout() {
   const confirmButton = app.querySelector('[data-confirm-attendance]');
   if (confirmButton) confirmButton.addEventListener('click', () => document.querySelector('#attendance-modal')?.classList.add('open'));
   const locationButton = app.querySelector('[data-location-jump]');
-  if (locationButton) locationButton.addEventListener('click', event => { event.preventDefault(); const target = document.querySelector('#event-location'); if (target) { window.location.hash = 'event-location'; target.scrollIntoView({ behavior: 'auto', block: 'start' }); } });
+  if (locationButton) locationButton.addEventListener('click', event => { event.preventDefault(); const target = document.querySelector('#event-location'); if (target) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 18, behavior: 'auto' }); });
   const closeModal = app.querySelector('[data-close-attendance]');
   if (closeModal) closeModal.addEventListener('click', () => document.querySelector('#attendance-modal')?.classList.remove('open'));
   const attendanceForm = app.querySelector('#attendance-form');
