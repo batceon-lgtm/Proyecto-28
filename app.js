@@ -22,13 +22,13 @@ function layout() {
   const admin = state.role === 'admin';
   app.innerHTML = `<div class="shell">
     <aside class="sidebar"><div class="brand">Celebración<span>Portal del evento</span></div>
-      <nav class="nav">${admin ? adminNav.map(([id,icon,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${icon} &nbsp; ${label}</button>`).join('') : `<button class="${state.view==='dashboard'?'active':''}" data-view="dashboard">⌂ &nbsp; Mi invitación</button><button class="${state.view==='guest-songs'?'active':''}" data-view="guest-songs">♫ &nbsp; Música</button><button data-scroll="guest-wall">♡ &nbsp; Dedicatorias</button>`}</nav>
+      <nav class="nav">${admin ? adminNav.map(([id,icon,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${icon} &nbsp; ${label}</button>`).join('') : `<button class="${state.view==='dashboard'?'active':''}" data-view="dashboard">⌂ &nbsp; Mi invitación</button><button class="${state.view==='guest-songs'?'active':''}" data-view="guest-songs">♫ &nbsp; Música</button><button class="${state.view==='guest-wall'?'active':''}" data-view="guest-wall">♡ &nbsp; Dedicatorias</button>`}</nav>
       <div class="sidebar-footer">Fiesta de cumpleaños<br><span>Configuración del evento</span></div>
     </aside><main class="main"><header class="topbar"><div><div class="eyebrow">${admin ? 'Área privada' : 'Área de invitados'}</div><strong>${admin ? 'Organización del evento' : 'Te esperamos'}</strong></div><div class="profile"><span>${auth.user.name || ''}</span><button class="btn ghost" id="switch-role">Cerrar sesión</button><span class="avatar">${admin ? 'AD' : 'IN'}</span></div></header>
     <section class="content">${admin ? adminView() : guestView()}</section></main></div><div class="toast" id="toast"></div>`;
   app.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { state.view = btn.dataset.view; layout(); }));
   app.querySelectorAll('[data-scroll]').forEach(btn => btn.addEventListener('click', event => { event.preventDefault(); const target = document.querySelector('#' + btn.dataset.scroll); if (target) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 18, behavior: 'auto' }); }));
-  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); if (state.view !== 'guest-songs') removeGuestMusicFromHome(); loadPublicMusic(); }
+  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); if (state.view === 'dashboard') { removeGuestMusicFromHome(); removeGuestDedicationFromHome(); } loadPublicMusic(); if (state.view === 'guest-wall') loadDedications(); }
   if (admin && state.view === 'music') { prepareAdminMusic(); preparePlaylistAdmin(); loadSongSuggestions(); loadPlaylistsAdmin(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
@@ -80,6 +80,36 @@ function layout() {
     if (error) { toast(error.message || 'No se pudo guardar la playlist.'); return; }
     playlistForm.reset(); toast('Playlist agregada'); loadPlaylistsAdmin();
   });
+  const dedicationForm = app.querySelector('#dedication-form');
+  if (dedicationForm) dedicationForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const formData = new FormData(dedicationForm);
+    const id = String(formData.get('dedicationId') || '');
+    const target = String(formData.get('dedicationTarget') || 'general');
+    const message = String(formData.get('dedicationMessage') || '').trim();
+    const button = dedicationForm.querySelector('button[type="submit"]');
+    button.disabled = true; button.textContent = id ? 'Guardando cambios...' : 'Publicando...';
+    const rpc = id ? 'update_dedication' : 'add_dedication';
+    const params = id ? { p_id: id, p_guest_name: auth.user.name, p_guest_token: auth.user.token, p_target: target, p_message: message } : { p_guest_name: auth.user.name, p_guest_token: auth.user.token, p_target: target, p_message: message };
+    const { error } = await supabaseClient.rpc(rpc, params);
+    button.disabled = false; button.textContent = id ? 'Guardar cambios' : 'Publicar dedicatoria';
+    if (error) { toast(error.message || 'No se pudo guardar la dedicatoria.'); return; }
+    dedicationForm.reset(); dedicationForm.querySelector('[name="dedicationId"]').value = ''; button.textContent = 'Publicar dedicatoria'; toast(id ? 'Dedicatoria actualizada' : 'Dedicatoria publicada'); loadDedications();
+  });
+  app.querySelectorAll('[data-edit-dedication]').forEach(button => button.addEventListener('click', () => {
+    const form = document.querySelector('#dedication-form'); if (!form) return;
+    form.querySelector('[name="dedicationId"]').value = button.dataset.id;
+    form.querySelector('[name="dedicationTarget"]').value = button.dataset.target;
+    form.querySelector('[name="dedicationMessage"]').value = button.dataset.message;
+    form.querySelector('button[type="submit"]').textContent = 'Guardar cambios';
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  app.querySelectorAll('[data-delete-dedication]').forEach(button => button.addEventListener('click', async () => {
+    if (!confirm('¿Eliminar esta dedicatoria?')) return;
+    const { error } = await supabaseClient.rpc('delete_dedication', { p_id: button.dataset.id, p_guest_name: auth.user.name, p_guest_token: auth.user.token });
+    if (error) { toast(error.message || 'No se pudo eliminar la dedicatoria.'); return; }
+    toast('Dedicatoria eliminada'); loadDedications();
+  }));
   if (!admin) startCountdown();
   if (admin) loadAttendanceSummary();
   if (admin && state.view === 'guests') loadGuestList();
@@ -154,6 +184,26 @@ async function loadPlaylistsAdmin() {
   node.innerHTML = playlists.length ? playlists.map(playlist => `<div class="admin-playlist"><strong>${escapeHtml(playlist.title)}</strong><a class="song-link" href="${escapeHtml(playlist.spotify_url)}" target="_blank" rel="noreferrer">Abrir ↗</a></div>`).join('') : '<p class="form-hint">Todavía no hay playlists agregadas.</p>';
 }
 
+async function loadDedications() {
+  const list = document.querySelector('#dedications-list');
+  if (!list || !supabaseClient) return;
+  const { data, error } = await supabaseClient.rpc('list_dedications', { p_guest_name: auth.user.name, p_guest_token: auth.user.token });
+  if (error) { list.innerHTML = '<p class="form-hint">No se pudieron cargar las dedicatorias. Ejecuta el SQL actualizado.</p>'; return; }
+  const dedications = Array.isArray(data) ? data : [];
+  const labels = { general: 'Para todos', fabian: 'Para Fabián', alexander: 'Para Alexander' };
+  list.innerHTML = dedications.length ? dedications.map(item => `<article class="dedication-card"><div class="dedication-meta"><span class="pill">${labels[item.target] || 'Para todos'}</span><small>${escapeHtml(item.guest_name)}</small></div><p>${escapeHtml(item.message)}</p>${item.can_edit ? `<div class="dedication-actions"><button class="btn ghost" data-edit-dedication data-id="${item.id}" data-target="${item.target}" data-message="${escapeHtml(item.message)}">Editar</button><button class="btn ghost" data-delete-dedication data-id="${item.id}">Eliminar</button></div>` : ''}</article>`).join('') : '<p class="form-hint">Todavía no hay dedicatorias publicadas.</p>';
+  list.querySelectorAll('[data-edit-dedication]').forEach(button => button.addEventListener('click', () => {
+    const form = document.querySelector('#dedication-form'); if (!form) return;
+    form.querySelector('[name="dedicationId"]').value = button.dataset.id; form.querySelector('[name="dedicationTarget"]').value = button.dataset.target; form.querySelector('[name="dedicationMessage"]').value = button.dataset.message; form.querySelector('button[type="submit"]').textContent = 'Guardar cambios'; form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  list.querySelectorAll('[data-delete-dedication]').forEach(button => button.addEventListener('click', async () => {
+    if (!confirm('¿Eliminar esta dedicatoria?')) return;
+    const { error: deleteError } = await supabaseClient.rpc('delete_dedication', { p_id: button.dataset.id, p_guest_name: auth.user.name, p_guest_token: auth.user.token });
+    if (deleteError) { toast(deleteError.message || 'No se pudo eliminar la dedicatoria.'); return; }
+    toast('Dedicatoria eliminada'); loadDedications();
+  }));
+}
+
 function getSpotifyEmbedUrl(url) {
   try { const parsed = new URL(url); const parts = parsed.pathname.split('/').filter(Boolean); const id = parts[parts.indexOf('playlist') + 1]; return id ? `https://open.spotify.com/embed/playlist/${id}?utm_source=generator&theme=0` : url; } catch { return url; }
 }
@@ -181,7 +231,7 @@ function authView() { return `<div class="auth-screen"><div class="auth-card"><d
 function bindAuth() {
   app.querySelectorAll('[data-auth-mode]').forEach(btn => btn.addEventListener('click', () => { auth.mode=btn.dataset.authMode; layout(); }));
   const guestForm = document.querySelector('#guest-form');
-  if (guestForm) guestForm.addEventListener('submit', async e => { e.preventDefault(); const name = new FormData(guestForm).get('guestName').trim(); if (!name) return; const button = guestForm.querySelector('button'); button.disabled = true; button.textContent = 'Guardando...'; if (supabaseClient) { const { error } = await supabaseClient.rpc('register_guest', { p_name: name }); if (error) { button.disabled = false; button.textContent = 'Entrar como invitado'; alert('No se pudo guardar el invitado. Ejecuta la configuración SQL de Supabase.'); return; } } else { const names = JSON.parse(localStorage.getItem('eventGuestNames') || '[]'); if (!names.some(n => n.toLowerCase() === name.toLowerCase())) { names.push(name); localStorage.setItem('eventGuestNames', JSON.stringify(names)); } } auth.user={name, role:'guest'}; state.role='guest'; layout(); });
+  if (guestForm) guestForm.addEventListener('submit', async e => { e.preventDefault(); const name = new FormData(guestForm).get('guestName').trim(); if (!name) return; const button = guestForm.querySelector('button'); button.disabled = true; button.textContent = 'Guardando...'; if (supabaseClient) { const { error } = await supabaseClient.rpc('register_guest', { p_name: name }); if (error) { button.disabled = false; button.textContent = 'Entrar como invitado'; alert('No se pudo guardar el invitado. Ejecuta la configuración SQL de Supabase.'); return; } } else { const names = JSON.parse(localStorage.getItem('eventGuestNames') || '[]'); if (!names.some(n => n.toLowerCase() === name.toLowerCase())) { names.push(name); localStorage.setItem('eventGuestNames', JSON.stringify(names)); } } auth.user={name, token:getGuestToken(name), role:'guest'}; state.role='guest'; layout(); });
   const adminForm = document.querySelector('#admin-form');
   if (adminForm) adminForm.addEventListener('submit', async e => { e.preventDefault(); const data = new FormData(adminForm); const username = String(data.get('username')).trim().toLowerCase(); const record = adminDirectory[username]; if (!record || !supabaseClient) { document.querySelector('#auth-error').textContent='La autenticación todavía no está configurada.'; return; } const { data: result, error } = await supabaseClient.auth.signInWithPassword({ email: record.email, password: data.get('password') }); if (error) { const message = error.message?.toLowerCase().includes('email not confirmed') ? 'La cuenta existe, pero debes activar la confirmación automática en Supabase.' : 'Usuario o contraseña incorrectos. Verifica que la cuenta use el correo interno indicado y que la contraseña coincida.'; document.querySelector('#auth-error').textContent=message; return; } auth.user={name:record.name, username, role:'admin', id:result.user.id}; state.role='admin'; state.view='dashboard'; layout(); });
 }
@@ -199,8 +249,10 @@ function tasks() { return `<div class="section-head"><div><div class="eyebrow">O
 function music() { return `<div class="section-head"><div><div class="eyebrow">Participación de invitados</div><h1>Sugerencias musicales</h1></div><button class="btn" data-action="Playlist actualizada">Crear playlist</button></div><div class="card"><div class="section-head"><h2>Para revisar</h2><small>8 pendientes</small></div>${[['Dancing Queen','ABBA','12 votos'],['La vida es un carnaval','Celia Cruz','9 votos'],['Vivir mi vida','Marc Anthony','7 votos'],['September','Earth, Wind & Fire','5 votos']].map(s=>`<div class="song"><span class="icon">♫</span><div class="row-main"><strong>${s[0]}</strong><span>${s[1]}</span></div><span>${s[2]}</span><button class="btn ghost" data-action="Canción aprobada">Aprobar</button></div>`).join('')}</div>`; }
 function content() { return `<div class="section-head"><div><div class="eyebrow">Comunidad</div><h1>Contenido de invitados</h1></div><button class="btn" data-action="Contenido aprobado">Moderar pendientes</button></div><div class="grid two"><div class="card"><div class="section-head"><h2>Dedicatorias recientes</h2><small>12 publicadas</small></div><p>“Que este nuevo año venga lleno de momentos bonitos y mucha música.”</p><small style="color:var(--muted)">— María Fernanda · hace 2 horas</small><hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><p>“¡A celebrar como se debe! Nos vemos en la pista.”</p><small style="color:var(--muted)">— Diego Ramírez · ayer</small></div><div class="card"><div class="section-head"><h2>Galería</h2><small>24 fotos</small></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${['#dce8df','#f2dfda','#e8ddc7','#cedbd1','#ead2cc','#d9e4df'].map(c=>`<div style="height:90px;border-radius:10px;background:${c};display:grid;place-items:center;font-size:22px">✦</div>`).join('')}</div></div></div>`; }
 
-function guestView() { return state.view === 'guest-songs' ? guestMusicPage() : guestHomePage(); }
+function getGuestToken(name) { const key = 'eventGuestToken_' + name.trim().toLowerCase(); let token = localStorage.getItem(key); if (!token) { token = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem(key, token); } return token; }
+function guestView() { return state.view === 'guest-songs' ? guestMusicPage() : state.view === 'guest-wall' ? guestDedicationsPage() : guestHomePage(); }
 function guestMusicPage() { return `<div class="music-page"><div class="section-head"><div><div class="eyebrow">Área de invitados</div><h1>Música del evento</h1><p class="sub">Sugiere una canción y revisa las playlists preparadas para la celebración.</p></div><button class="btn secondary" data-view="dashboard">← Mi invitación</button></div><div class="card music-panel"><div class="section-head"><div><h2>Sugerir una canción</h2><small>La canción es obligatoria; el artista y Spotify son opcionales.</small></div></div><form id="song-suggestion-form" class="song-suggestion-form"><label>Nombre de la canción *<input name="songTitle" required maxlength="160" placeholder="Ej. Dancing Queen" /></label><label>Artista <span>(opcional)</span><input name="artist" maxlength="120" placeholder="Ej. ABBA" /></label><label>Enlace de Spotify <span>(opcional)</span><input name="spotifyUrl" type="url" placeholder="https://open.spotify.com/..." /></label><button class="btn" type="submit">Enviar sugerencia</button></form><p class="form-hint">No se mostrará quién envió la sugerencia.</p><div class="music-subhead"><h3>Canciones sugeridas</h3><small>Participación de invitados</small></div><div id="public-song-suggestions"><p class="form-hint">Cargando sugerencias...</p></div><div class="music-subhead playlist-heading"><h3>Playlists del evento</h3><small>Escucha una vista previa</small></div><div id="public-playlists"><p class="form-hint">Cargando playlists...</p></div></div></div>`; }
+function guestDedicationsPage() { return `<div class="dedications-page"><div class="section-head"><div><div class="eyebrow">Área de invitados</div><h1>Dedicatorias</h1><p class="sub">Deja un mensaje y elige si va dirigido a todos, a Fabián o a Alexander.</p></div><button class="btn secondary" data-view="dashboard">← Mi invitación</button></div><div class="card dedication-panel"><div class="section-head"><div><h2>Escribe una dedicatoria</h2><small>Puedes publicar como máximo 3 dedicatorias.</small></div></div><form id="dedication-form" class="song-suggestion-form"><input type="hidden" name="dedicationId" /><label>¿Para quién es?<select name="dedicationTarget"><option value="general">Para todos</option><option value="fabian">Para Fabián</option><option value="alexander">Para Alexander</option></select></label><label>Mensaje<textarea name="dedicationMessage" required maxlength="500" placeholder="Escribe tu mensaje..."></textarea></label><button class="btn" type="submit">Publicar dedicatoria</button></form><div class="music-subhead"><h3>Dedicatorias publicadas</h3><small>Los cambios se actualizan para todos</small></div><div id="dedications-list"><p class="form-hint">Cargando dedicatorias...</p></div></div></div>`; }
 function guestHomePage() { return `<div class="guest-hero"><div class="eyebrow">Cumpleaños de Fabián y Alex</div><h1>Nocturnal Fest</h1><p class="sub">Una noche para compartir, disfrutar y vivir experiencias lindas, con buena música, parrilla, piscina y la mejor compañía.</p><div class="countdown"><div><b data-countdown="days">00</b><span>Días</span></div><div><b data-countdown="hours">00</b><span>Horas</span></div><div><b data-countdown="minutes">00</b><span>Minutos</span></div><div><b data-countdown="seconds">00</b><span>Segundos</span></div></div><div class="eyebrow">Chaclacayo · 28 de noviembre de 2026 · 6:00 p. m.</div><div class="actions" style="justify-content:center"><button class="btn" data-confirm-attendance>Confirmar asistencia</button><button class="btn secondary" data-location-jump>Cómo llegar</button></div></div><div id="attendance-modal" class="modal"><div class="modal-card"><button class="modal-close" data-close-attendance>×</button><div class="eyebrow">Confirmación de asistencia</div><h2>¿Vas a acompañarnos?</h2><p class="sub">Invitado: <strong>${auth.user?.name || 'Invitado'}</strong></p><form id="attendance-form" class="attendance-form"><label><input type="radio" name="attending" value="yes" checked /> Sí, asistiré</label><label><input type="radio" name="attending" value="no" /> No podré asistir</label><button class="btn" type="submit">Guardar respuesta</button></form></div></div><section id="event-location" class="location-section"><div class="section-head"><div><div class="eyebrow">Ubicación del evento</div><h2>Casa de Campo Rumi Wasi</h2><p class="sub">Chaclacayo · Lima Este</p></div><a class="btn secondary" href="https://www.google.com/maps/search/?api=1&query=-11.952357292175293,-76.71927642822266" target="_blank" rel="noreferrer">Abrir en Google Maps</a></div><div class="location-grid"><div class="location-sketch"><div class="sketch-label">Lima</div><div class="sketch-road"><span class="road-dot"></span><i></i><span class="road-dot"></span></div><div class="sketch-label destination">Chaclacayo</div><div class="sketch-pin">⌖</div><strong>Casa de Campo Rumi Wasi</strong><small>Coordenadas aproximadas: -11.952357, -76.719276</small></div><div class="route-list"><div class="route-item"><span class="route-icon">🚗</span><div><strong>En taxi o aplicativo</strong><p>Indica “Casa de Campo Rumi Wasi, Chaclacayo” y comparte la ubicación exacta.</p><span class="pill">Precio: consultar según origen</span></div></div><div class="route-item"><span class="route-icon">🚌</span><div><strong>Desde Lima Este</strong><p>Toma un bus hacia Chaclacayo y completa el último tramo en taxi local.</p><span class="pill">Ruta sugerida</span></div></div><div class="route-item"><span class="route-icon">📍</span><div><strong>Antes de salir</strong><p>Revisa el tráfico y calcula tu hora de partida. La entrada será desde las 6:00 p. m.</p></div></div></div></div></section><div class="grid guest-grid"><div class="card"><span class="icon">◉</span><h3>Traer ropa de baño</h3><p class="sub">La piscina estará lista.<br>Ven preparado para mojarte.</p></div><div class="card"><span class="icon">✦</span><h3>Dress code</h3><p class="sub">Retro ochentero + neón<br>Brilla a tu manera.</p></div><div class="card"><span class="icon">♨</span><h3>Habrá parrilla</h3><p class="sub">Recepción · Cena · Música<br>Juegos · Baile · Piscina</p></div></div><div class="grid two"><div class="card"><div class="section-head"><h2>Elige una canción</h2><small>Vota por tus favoritas</small></div>${[['Dancing Queen','ABBA','12'],['La vida es un carnaval','Celia Cruz','9'],['Vivir mi vida','Marc Anthony','7']].map(s=>`<div class="song"><span>♫</span><div class="row-main"><strong>${s[0]}</strong><span>${s[1]}</span></div><button class="vote" data-action="Voto registrado">♡ ${s[2]}</button></div>`).join('')}<div class="actions"><button class="btn ghost" data-action="Sugerencia enviada">+ Sugerir canción</button></div></div><div class="card"><div class="section-head"><h2>Deja una dedicatoria</h2></div><textarea placeholder="Escribe un mensaje para el cumpleañero..."></textarea><div class="actions"><button class="btn" data-action="Dedicatoria publicada">Publicar mensaje</button></div></div></div>`; }
 function prepareLocationPlaceholders() {
   const mapPreview = document.querySelector('.location-sketch');
@@ -231,6 +283,10 @@ function prepareAdminMusic() {
 }
 function removeGuestMusicFromHome() {
   const card = document.querySelector('.grid.two .card:first-child');
+  if (card) card.remove();
+}
+function removeGuestDedicationFromHome() {
+  const card = document.querySelector('.grid.two .card');
   if (card) card.remove();
 }
 function prepareGuestMusicPanel() {
