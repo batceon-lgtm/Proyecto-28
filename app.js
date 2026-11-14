@@ -6,7 +6,7 @@ const adminDirectory = {
   'al.t_creo': { name: 'Alexander', email: 'al.t_creo@proyecto28.local' },
   'broncano78': { name: 'Fabián', email: 'broncano78@proyecto28.local' },
   'cabezon12': { name: 'Carlos', email: 'cabezon12@proyecto28.local' },
-  'niñoviejo22': { name: 'Guillermo', email: 'niñoviejo22@proyecto28.local' }
+  'ninhoviejo22': { name: 'Guillermo', email: 'ninhoviejo22@proyecto28.local' }
 };
 // Las cuentas reales deben validarse en un backend. Nunca se publican
 // contraseñas ni hashes en este frontend público.
