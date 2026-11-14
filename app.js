@@ -28,7 +28,7 @@ function layout() {
     <section class="content">${admin ? adminView() : guestView()}</section></main></div><div class="toast" id="toast"></div>`;
   app.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { state.view = btn.dataset.view; layout(); }));
   app.querySelectorAll('[data-scroll]').forEach(btn => btn.addEventListener('click', event => { event.preventDefault(); const target = document.querySelector('#' + btn.dataset.scroll); if (target) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 18, behavior: 'auto' }); }));
-  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); prepareGuestMusic(); prepareGuestMusicPanel(); loadPublicMusic(); }
+  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); if (state.view !== 'guest-songs') removeGuestMusicFromHome(); loadPublicMusic(); }
   if (admin && state.view === 'music') { prepareAdminMusic(); preparePlaylistAdmin(); loadSongSuggestions(); loadPlaylistsAdmin(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
@@ -228,6 +228,10 @@ function prepareAdminMusic() {
   const card = document.querySelector('.view .card');
   if (!card) return;
   card.innerHTML = '<div class="section-head"><div><h2>Sugerencias recibidas</h2><small>Revisa canciones y enlaces enviados por invitados</small></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Canción</th><th>Artista</th><th>Invitado</th><th>Spotify</th><th>Estado</th></tr></thead><tbody id="song-suggestions-body"><tr><td colspan="5">Cargando sugerencias...</td></tr></tbody></table></div>';
+}
+function removeGuestMusicFromHome() {
+  const card = document.querySelector('.grid.two .card:first-child');
+  if (card) card.remove();
 }
 function prepareGuestMusicPanel() {
   const card = document.querySelector('.grid.two .card:first-child');
