@@ -88,3 +88,26 @@ $$;
 revoke all on function public.get_attendance_summary() from public;
 grant execute on function public.get_attendance_summary() to authenticated;
 
+create or replace function public.list_guests()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', id,
+        'name', name,
+        'attending', attending,
+        'created_at', created_at,
+        'updated_at', updated_at
+      ) order by name
+    ), '[]'::jsonb
+  )
+  from public.guests;
+$$;
+
+revoke all on function public.list_guests() from public;
+grant execute on function public.list_guests() to authenticated;
+
