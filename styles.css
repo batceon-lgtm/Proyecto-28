@@ -156,6 +156,10 @@ input,select,textarea { background:rgba(4,7,27,.72); color:#fff; border-color:rg
 .dedication-card p { margin:10px 0 0; color:#e8ebff; line-height:1.6; white-space:pre-wrap; }
 .dedication-actions { display:flex; gap:8px; margin-top:12px; }
 .dedication-actions .btn { padding:8px 11px; font-size:12px; }
+.dedication-header-actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+.dedication-modal-card { max-height:90vh; overflow:auto; }
+.admin-dedications-card { margin-top:24px; }
+@media(max-width:600px) { .dedication-header-actions { width:100%; justify-content:stretch; } .dedication-header-actions .btn { flex:1; } }
 .sketch-label { color:#fff; font-weight:700; }
 .sketch-label.destination { color:var(--pink); text-shadow:0 0 10px rgba(255,50,213,.6); }
 .sketch-road { width:70%; display:flex; align-items:center; gap:8px; }
