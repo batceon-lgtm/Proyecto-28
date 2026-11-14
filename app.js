@@ -27,7 +27,7 @@ function layout() {
     </aside><main class="main"><header class="topbar"><div><div class="eyebrow">${admin ? 'Área privada' : 'Área de invitados'}</div><strong>${admin ? 'Organización del evento' : 'Te esperamos'}</strong></div><div class="profile"><span>${auth.user.name || ''}</span><button class="btn ghost" id="switch-role">Cerrar sesión</button><span class="avatar">${admin ? 'AD' : 'IN'}</span></div></header>
     <section class="content">${admin ? adminView() : guestView()}</section></main></div><div class="toast" id="toast"></div>`;
   app.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { state.view = btn.dataset.view; layout(); }));
-  if (!admin) prepareLocationPlaceholders();
+  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
   const confirmButton = app.querySelector('[data-confirm-attendance]');
@@ -134,6 +134,11 @@ function prepareLocationPlaceholders() {
     ['💳', 'Costos aproximados', 'Se incluirán las tarifas orientativas de taxi, bus u otras opciones cuando definamos las rutas.']
   ];
   items.forEach((item, index) => { if (!content[index]) return; const [icon, title, description] = content[index]; item.innerHTML = `<span class="route-icon">${icon}</span><div><strong>${title}</strong><p>${description}</p><span class="pill">Próximamente</span></div>`; });
+}
+function prepareGuestDetails() {
+  const grid = document.querySelector('.guest-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="card"><span class="icon">◉</span><h3>Traer ropa de baño</h3><p class="sub">La piscina estará lista.<br>Ven preparado para mojarte.</p></div><div class="card"><span class="icon">♨</span><h3>Habrá parrilla</h3><p class="sub">Disfruta de una parrilla preparada para compartir.</p></div><div class="card"><span class="icon">🥤</span><h3>Bebidas gratuitas</h3><p class="sub">Habrá bebidas para todos, pero también puedes traer las tuyas. No hay problema.</p></div>';
 }
 function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2200); }
 layout();
