@@ -317,11 +317,32 @@ as $$
     'created_at', created_at,
     'can_edit', (guest_key = lower(trim(coalesce(p_guest_name, ''))) and guest_token = coalesce(p_guest_token, ''))
   ) order by created_at desc), '[]'::jsonb)
-  from public.dedications;
+  from public.dedications
+  where guest_key = lower(trim(coalesce(p_guest_name, '')))
+    and guest_token = coalesce(p_guest_token, '');
 $$;
 
 revoke all on function public.list_dedications(text, text) from public;
 grant execute on function public.list_dedications(text, text) to anon, authenticated;
+
+create or replace function public.list_all_dedications()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', id,
+    'guest_name', guest_name,
+    'target', target,
+    'message', message,
+    'created_at', created_at
+  ) order by created_at desc), '[]'::jsonb)
+  from public.dedications;
+$$;
+
+revoke all on function public.list_all_dedications() from public;
+grant execute on function public.list_all_dedications() to authenticated;
 
 create or replace function public.update_dedication(
   p_id uuid,
