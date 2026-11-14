@@ -296,7 +296,7 @@ function prepareAdminDashboardDedications() {
 async function loadAdminDedications() {
   const list = document.querySelector('#admin-dedications-list');
   if (!list || !supabaseClient) return;
-  const { data, error } = await supabaseClient.rpc('list_dedications');
+  const { data, error } = await supabaseClient.rpc('list_all_dedications');
   if (error) { list.innerHTML = '<p class="form-hint">No se pudieron cargar las dedicatorias. Ejecuta el SQL actualizado.</p>'; return; }
   const labels = { general: 'Para todos', fabian: 'Para Fabián', alexander: 'Para Alexander' };
   const dedications = Array.isArray(data) ? data.slice(0, 6) : [];
