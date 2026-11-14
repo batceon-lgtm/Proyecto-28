@@ -27,8 +27,8 @@ function layout() {
     </aside><main class="main"><header class="topbar"><div><div class="eyebrow">${admin ? 'Área privada' : 'Área de invitados'}</div><strong>${admin ? 'Organización del evento' : 'Te esperamos'}</strong></div><div class="profile"><span>${auth.user.name || ''}</span><button class="btn ghost" id="switch-role">Cerrar sesión</button><span class="avatar">${admin ? 'AD' : 'IN'}</span></div></header>
     <section class="content">${admin ? adminView() : guestView()}</section></main></div><div class="toast" id="toast"></div>`;
   app.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { state.view = btn.dataset.view; layout(); }));
-  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); prepareGuestMusic(); }
-  if (admin && state.view === 'music') { prepareAdminMusic(); loadSongSuggestions(); }
+  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); prepareGuestMusic(); prepareGuestMusicPanel(); loadPublicMusic(); }
+  if (admin && state.view === 'music') { prepareAdminMusic(); preparePlaylistAdmin(); loadSongSuggestions(); loadPlaylistsAdmin(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
   const confirmButton = app.querySelector('[data-confirm-attendance]');
@@ -65,6 +65,19 @@ function layout() {
     button.disabled = false; button.textContent = 'Enviar sugerencia';
     if (error) { toast(error.message || 'No se pudo enviar la sugerencia. Ejecuta el SQL actualizado.'); return; }
     songForm.reset(); toast('Sugerencia enviada al equipo');
+  });
+  const playlistForm = app.querySelector('#playlist-form');
+  if (playlistForm) playlistForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const formData = new FormData(playlistForm);
+    const title = String(formData.get('playlistTitle') || '').trim();
+    const url = String(formData.get('playlistUrl') || '').trim();
+    const button = playlistForm.querySelector('button[type="submit"]');
+    button.disabled = true; button.textContent = 'Guardando...';
+    const { error } = await supabaseClient.rpc('add_spotify_playlist', { p_title: title, p_spotify_url: url });
+    button.disabled = false; button.textContent = 'Agregar playlist';
+    if (error) { toast(error.message || 'No se pudo guardar la playlist.'); return; }
+    playlistForm.reset(); toast('Playlist agregada'); loadPlaylistsAdmin();
   });
   if (!admin) startCountdown();
   if (admin) loadAttendanceSummary();
@@ -105,6 +118,43 @@ async function loadSongSuggestions() {
   if (error) { body.innerHTML = '<tr><td colspan="5">No se pudieron cargar las sugerencias. Ejecuta el SQL actualizado.</td></tr>'; return; }
   const songs = Array.isArray(data) ? data : [];
   body.innerHTML = songs.length ? songs.map(song => `<tr><td><strong>${escapeHtml(song.song_title)}</strong></td><td>${escapeHtml(song.artist || '—')}</td><td>${escapeHtml(song.guest_name)}</td><td>${song.spotify_url ? `<a class="song-link" href="${escapeHtml(song.spotify_url)}" target="_blank" rel="noreferrer">Abrir Spotify ↗</a>` : '—'}</td><td><span class="pill">${song.status === 'approved' ? 'Aprobada' : song.status === 'rejected' ? 'Descartada' : 'Pendiente'}</span></td></tr>`).join('') : '<tr><td colspan="5">Todavía no hay sugerencias.</td></tr>';
+}
+
+async function loadPublicMusic() {
+  if (!supabaseClient) return;
+  const songsNode = document.querySelector('#public-song-suggestions');
+  const playlistsNode = document.querySelector('#public-playlists');
+  const [songsResult, playlistsResult] = await Promise.all([
+    supabaseClient.rpc('list_public_song_suggestions'),
+    supabaseClient.rpc('list_spotify_playlists')
+  ]);
+  if (songsNode) {
+    if (songsResult.error) songsNode.innerHTML = '<p class="form-hint">Las sugerencias aparecerán aquí cuando se configure la sección musical.</p>';
+    else {
+      const songs = Array.isArray(songsResult.data) ? songsResult.data : [];
+      songsNode.innerHTML = songs.length ? songs.map(song => `<div class="public-song"><span>♫</span><div><strong>${escapeHtml(song.song_title)}</strong><small>${escapeHtml(song.artist || 'Artista no indicado')}</small></div>${song.spotify_url ? `<a class="song-link" href="${escapeHtml(song.spotify_url)}" target="_blank" rel="noreferrer">Spotify ↗</a>` : ''}</div>`).join('') : '<p class="form-hint">Todavía no hay canciones sugeridas.</p>';
+    }
+  }
+  if (playlistsNode) {
+    if (playlistsResult.error) playlistsNode.innerHTML = '<p class="form-hint">Las playlists aparecerán aquí cuando el administrador las agregue.</p>';
+    else {
+      const playlists = Array.isArray(playlistsResult.data) ? playlistsResult.data : [];
+      playlistsNode.innerHTML = playlists.length ? playlists.map(playlist => `<div class="playlist-embed"><h3>${escapeHtml(playlist.title)}</h3><iframe src="${escapeHtml(getSpotifyEmbedUrl(playlist.spotify_url))}" title="${escapeHtml(playlist.title)}" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe><a class="song-link" href="${escapeHtml(playlist.spotify_url)}" target="_blank" rel="noreferrer">Abrir en Spotify ↗</a></div>`).join('') : '<p class="form-hint">El administrador todavía no ha agregado playlists.</p>';
+    }
+  }
+}
+
+async function loadPlaylistsAdmin() {
+  const node = document.querySelector('#admin-playlists');
+  if (!node || !supabaseClient) return;
+  const { data, error } = await supabaseClient.rpc('list_spotify_playlists');
+  if (error) { node.innerHTML = '<p class="form-hint">No se pudieron cargar las playlists. Ejecuta el SQL actualizado.</p>'; return; }
+  const playlists = Array.isArray(data) ? data : [];
+  node.innerHTML = playlists.length ? playlists.map(playlist => `<div class="admin-playlist"><strong>${escapeHtml(playlist.title)}</strong><a class="song-link" href="${escapeHtml(playlist.spotify_url)}" target="_blank" rel="noreferrer">Abrir ↗</a></div>`).join('') : '<p class="form-hint">Todavía no hay playlists agregadas.</p>';
+}
+
+function getSpotifyEmbedUrl(url) {
+  try { const parsed = new URL(url); const parts = parsed.pathname.split('/').filter(Boolean); const id = parts[parts.indexOf('playlist') + 1]; return id ? `https://open.spotify.com/embed/playlist/${id}?utm_source=generator&theme=0` : url; } catch { return url; }
 }
 
 function startCountdown() {
@@ -174,6 +224,16 @@ function prepareAdminMusic() {
   const card = document.querySelector('.view .card');
   if (!card) return;
   card.innerHTML = '<div class="section-head"><div><h2>Sugerencias recibidas</h2><small>Revisa canciones y enlaces enviados por invitados</small></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Canción</th><th>Artista</th><th>Invitado</th><th>Spotify</th><th>Estado</th></tr></thead><tbody id="song-suggestions-body"><tr><td colspan="5">Cargando sugerencias...</td></tr></tbody></table></div>';
+}
+function prepareGuestMusicPanel() {
+  const card = document.querySelector('.grid.two .card:first-child');
+  if (!card || document.querySelector('#public-song-suggestions')) return;
+  card.insertAdjacentHTML('beforeend', '<div class="public-music"><div class="music-subhead"><h3>Canciones sugeridas</h3><small>Sin mostrar quién las envió</small></div><div id="public-song-suggestions"><p class="form-hint">Cargando sugerencias...</p></div><div class="music-subhead playlist-heading"><h3>Playlists del evento</h3><small>Escucha una vista previa</small></div><div id="public-playlists"><p class="form-hint">Cargando playlists...</p></div></div>');
+}
+function preparePlaylistAdmin() {
+  const card = document.querySelector('.view .card');
+  if (!card || document.querySelector('#playlist-form')) return;
+  card.insertAdjacentHTML('beforeend', '<hr class="music-divider"><div class="music-subhead"><div><h2>Playlists de Spotify</h2><small>Agrega playlists públicas para mostrarlas a los invitados</small></div></div><form id="playlist-form" class="song-suggestion-form"><label>Nombre de la playlist *<input name="playlistTitle" required maxlength="120" placeholder="Ej. Playlist de la fiesta" /></label><label>Enlace público de Spotify *<input name="playlistUrl" type="url" required placeholder="https://open.spotify.com/playlist/..." /></label><button class="btn" type="submit">Agregar playlist</button></form><div id="admin-playlists" class="admin-playlists"><p class="form-hint">Cargando playlists...</p></div>');
 }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char])); }
 function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2200); }
