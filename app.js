@@ -22,11 +22,12 @@ function layout() {
   const admin = state.role === 'admin';
   app.innerHTML = `<div class="shell">
     <aside class="sidebar"><div class="brand">Celebración<span>Portal del evento</span></div>
-      <nav class="nav">${admin ? adminNav.map(([id,icon,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${icon} &nbsp; ${label}</button>`).join('') : `<button class="active">⌂ &nbsp; Mi invitación</button><button data-view="guest-songs">♫ &nbsp; Música</button><button data-view="guest-wall">♡ &nbsp; Dedicatorias</button>`}</nav>
+      <nav class="nav">${admin ? adminNav.map(([id,icon,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${icon} &nbsp; ${label}</button>`).join('') : `<button class="active">⌂ &nbsp; Mi invitación</button><button data-scroll="guest-music">♫ &nbsp; Música</button><button data-scroll="guest-wall">♡ &nbsp; Dedicatorias</button>`}</nav>
       <div class="sidebar-footer">Fiesta de cumpleaños<br><span>Configuración del evento</span></div>
     </aside><main class="main"><header class="topbar"><div><div class="eyebrow">${admin ? 'Área privada' : 'Área de invitados'}</div><strong>${admin ? 'Organización del evento' : 'Te esperamos'}</strong></div><div class="profile"><span>${auth.user.name || ''}</span><button class="btn ghost" id="switch-role">Cerrar sesión</button><span class="avatar">${admin ? 'AD' : 'IN'}</span></div></header>
     <section class="content">${admin ? adminView() : guestView()}</section></main></div><div class="toast" id="toast"></div>`;
   app.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { state.view = btn.dataset.view; layout(); }));
+  app.querySelectorAll('[data-scroll]').forEach(btn => btn.addEventListener('click', event => { event.preventDefault(); const target = document.querySelector('#' + btn.dataset.scroll); if (target) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 18, behavior: 'auto' }); }));
   if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); prepareGuestMusic(); prepareGuestMusicPanel(); loadPublicMusic(); }
   if (admin && state.view === 'music') { prepareAdminMusic(); preparePlaylistAdmin(); loadSongSuggestions(); loadPlaylistsAdmin(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
@@ -218,6 +219,7 @@ function prepareGuestDetails() {
 function prepareGuestMusic() {
   const card = document.querySelector('.grid.two .card:first-child');
   if (!card) return;
+  card.id = 'guest-music';
   card.innerHTML = '<div class="section-head"><div><h2>Sugerencias de canciones</h2><small>Escribe la canción que te gustaría escuchar</small></div></div><form id="song-suggestion-form" class="song-suggestion-form"><label>Nombre de la canción *<input name="songTitle" required maxlength="160" placeholder="Ej. Dancing Queen" /></label><label>Artista <span>(opcional)</span><input name="artist" maxlength="120" placeholder="Ej. ABBA" /></label><label>Enlace de Spotify <span>(opcional)</span><input name="spotifyUrl" type="url" placeholder="https://open.spotify.com/..." /></label><button class="btn" type="submit">Enviar sugerencia</button></form><p class="form-hint">Si no recuerdas el artista, no hay problema. Solo necesitamos el nombre de la canción.</p>';
 }
 function prepareAdminMusic() {
@@ -228,6 +230,8 @@ function prepareAdminMusic() {
 function prepareGuestMusicPanel() {
   const card = document.querySelector('.grid.two .card:first-child');
   if (!card || document.querySelector('#public-song-suggestions')) return;
+  const wall = document.querySelector('.grid.two .card:nth-child(2)');
+  if (wall) wall.id = 'guest-wall';
   card.insertAdjacentHTML('beforeend', '<div class="public-music"><div class="music-subhead"><h3>Canciones sugeridas</h3><small>Sin mostrar quién las envió</small></div><div id="public-song-suggestions"><p class="form-hint">Cargando sugerencias...</p></div><div class="music-subhead playlist-heading"><h3>Playlists del evento</h3><small>Escucha una vista previa</small></div><div id="public-playlists"><p class="form-hint">Cargando playlists...</p></div></div>');
 }
 function preparePlaylistAdmin() {
