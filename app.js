@@ -27,7 +27,8 @@ function layout() {
     </aside><main class="main"><header class="topbar"><div><div class="eyebrow">${admin ? 'Área privada' : 'Área de invitados'}</div><strong>${admin ? 'Organización del evento' : 'Te esperamos'}</strong></div><div class="profile"><span>${auth.user.name || ''}</span><button class="btn ghost" id="switch-role">Cerrar sesión</button><span class="avatar">${admin ? 'AD' : 'IN'}</span></div></header>
     <section class="content">${admin ? adminView() : guestView()}</section></main></div><div class="toast" id="toast"></div>`;
   app.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { state.view = btn.dataset.view; layout(); }));
-  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); }
+  if (!admin) { prepareLocationPlaceholders(); prepareGuestDetails(); prepareGuestMusic(); }
+  if (admin && state.view === 'music') { prepareAdminMusic(); loadSongSuggestions(); }
   document.querySelector('#switch-role').addEventListener('click', async () => { if (state.role === 'admin' && supabaseClient) await supabaseClient.auth.signOut(); auth.user = null; state.role='guest'; state.view='dashboard'; layout(); });
   app.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => toast(btn.dataset.action)));
   const confirmButton = app.querySelector('[data-confirm-attendance]');
@@ -49,6 +50,21 @@ function layout() {
     if (error) { toast('No se pudo guardar la confirmación. Ejecuta el SQL actualizado.'); return; }
     document.querySelector('#attendance-modal')?.classList.remove('open');
     toast(attending ? 'Asistencia confirmada' : 'Respuesta guardada');
+  });
+  const songForm = app.querySelector('#song-suggestion-form');
+  if (songForm) songForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const formData = new FormData(songForm);
+    const songTitle = String(formData.get('songTitle') || '').trim();
+    const artist = String(formData.get('artist') || '').trim();
+    const spotifyUrl = String(formData.get('spotifyUrl') || '').trim();
+    const button = songForm.querySelector('button[type="submit"]');
+    button.disabled = true; button.textContent = 'Enviando...';
+    let error = null;
+    if (supabaseClient) ({ error } = await supabaseClient.rpc('register_song_suggestion', { p_guest_name: auth.user.name, p_song_title: songTitle, p_artist: artist || null, p_spotify_url: spotifyUrl || null }));
+    button.disabled = false; button.textContent = 'Enviar sugerencia';
+    if (error) { toast(error.message || 'No se pudo enviar la sugerencia. Ejecuta el SQL actualizado.'); return; }
+    songForm.reset(); toast('Sugerencia enviada al equipo');
   });
   if (!admin) startCountdown();
   if (admin) loadAttendanceSummary();
@@ -80,6 +96,15 @@ async function loadGuestList() {
   if (pending) pending.textContent = guests.filter(g => g.attending === null).length;
   if (declined) declined.textContent = guests.filter(g => g.attending === false).length;
   body.innerHTML = guests.length ? guests.map(guest => `<tr><td><strong>${guest.name}</strong></td><td>Invitado</td><td>0</td><td><span class="pill ${guest.attending === false ? 'warn' : ''}">${guest.attending === true ? 'Confirmado' : guest.attending === false ? 'No asistirá' : 'Pendiente'}</span></td></tr>`).join('') : '<tr><td colspan="4">Todavía no hay invitados registrados.</td></tr>';
+}
+
+async function loadSongSuggestions() {
+  const body = document.querySelector('#song-suggestions-body');
+  if (!body || !supabaseClient) return;
+  const { data, error } = await supabaseClient.rpc('list_song_suggestions');
+  if (error) { body.innerHTML = '<tr><td colspan="5">No se pudieron cargar las sugerencias. Ejecuta el SQL actualizado.</td></tr>'; return; }
+  const songs = Array.isArray(data) ? data : [];
+  body.innerHTML = songs.length ? songs.map(song => `<tr><td><strong>${escapeHtml(song.song_title)}</strong></td><td>${escapeHtml(song.artist || '—')}</td><td>${escapeHtml(song.guest_name)}</td><td>${song.spotify_url ? `<a class="song-link" href="${escapeHtml(song.spotify_url)}" target="_blank" rel="noreferrer">Abrir Spotify ↗</a>` : '—'}</td><td><span class="pill">${song.status === 'approved' ? 'Aprobada' : song.status === 'rejected' ? 'Descartada' : 'Pendiente'}</span></td></tr>`).join('') : '<tr><td colspan="5">Todavía no hay sugerencias.</td></tr>';
 }
 
 function startCountdown() {
@@ -140,6 +165,17 @@ function prepareGuestDetails() {
   if (!grid) return;
   grid.innerHTML = '<div class="card"><span class="icon">◉</span><h3>Traer ropa de baño</h3><p class="sub">La piscina estará lista.<br>Ven preparado para mojarte.</p></div><div class="card"><span class="icon">♨</span><h3>Habrá parrilla</h3><p class="sub">Disfruta de una parrilla preparada para compartir.</p></div><div class="card"><span class="icon">🥤</span><h3>Bebidas gratuitas</h3><p class="sub">Habrá bebidas para todos, pero también puedes traer las tuyas. No hay problema.</p></div>';
 }
+function prepareGuestMusic() {
+  const card = document.querySelector('.grid.two .card:first-child');
+  if (!card) return;
+  card.innerHTML = '<div class="section-head"><div><h2>Sugerencias de canciones</h2><small>Escribe la canción que te gustaría escuchar</small></div></div><form id="song-suggestion-form" class="song-suggestion-form"><label>Nombre de la canción *<input name="songTitle" required maxlength="160" placeholder="Ej. Dancing Queen" /></label><label>Artista <span>(opcional)</span><input name="artist" maxlength="120" placeholder="Ej. ABBA" /></label><label>Enlace de Spotify <span>(opcional)</span><input name="spotifyUrl" type="url" placeholder="https://open.spotify.com/..." /></label><button class="btn" type="submit">Enviar sugerencia</button></form><p class="form-hint">Si no recuerdas el artista, no hay problema. Solo necesitamos el nombre de la canción.</p>';
+}
+function prepareAdminMusic() {
+  const card = document.querySelector('.view .card');
+  if (!card) return;
+  card.innerHTML = '<div class="section-head"><div><h2>Sugerencias recibidas</h2><small>Revisa canciones y enlaces enviados por invitados</small></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Canción</th><th>Artista</th><th>Invitado</th><th>Spotify</th><th>Estado</th></tr></thead><tbody id="song-suggestions-body"><tr><td colspan="5">Cargando sugerencias...</td></tr></tbody></table></div>';
+}
+function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char])); }
 function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2200); }
 layout();
 if (supabaseClient) supabaseClient.auth.getSession().then(({data}) => { if (data.session?.user?.email) { const username = data.session.user.email.split('@')[0]; const record = adminDirectory[username]; if (record) { auth.user={name:record.name, username, role:'admin', id:data.session.user.id}; state.role='admin'; layout(); } } });
